@@ -514,6 +514,21 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + "…"
 
 
+def _maybe_ultracode_prompt(prompt: str, effort: str | None) -> str:
+    """Ask the model to use dynamic workflows when ultracode is active."""
+    if (effort or "").strip().lower() != "ultracode":
+        return prompt
+    if "workflow_create" in prompt or "workflow_run" in prompt:
+        return prompt
+    return (
+        "Use dynamic workflows for this substantive task when it benefits from "
+        "parallel subagents or independent verification. Prefer the workflow_create "
+        "tool: write a deterministic JavaScript workflow using workflow(), agent(), "
+        "parallel(), pipeline(), phase(), and log(), run it, and summarize the run.\n\n"
+        f"Task:\n{prompt}"
+    )
+
+
 def _format_pending_tool_results(messages: list[ConversationMessage]) -> str | None:
     """Render a compact summary when we stop after tool execution but before the follow-up model turn."""
     if not messages:
@@ -732,6 +747,8 @@ async def handle_line(
     settings = bundle.current_settings()
     if bundle.enforce_max_turns:
         bundle.engine.set_max_turns(settings.max_turns)
+    if user_message is None:
+        line = _maybe_ultracode_prompt(line, settings.effort)
     latest_user_prompt = line or (user_message.text if user_message is not None else "")
     system_prompt = build_runtime_system_prompt(
         settings,

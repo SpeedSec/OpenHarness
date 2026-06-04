@@ -87,6 +87,14 @@ class TaskSnapshot(BaseModel):
         )
 
 
+class CommandSnapshot(BaseModel):
+    """UI-safe slash command metadata."""
+
+    name: str
+    description: str = ""
+    aliases: list[str] = Field(default_factory=list)
+
+
 class BackendEvent(BaseModel):
     """One event sent from the Python backend to the React frontend."""
 
@@ -118,6 +126,7 @@ class BackendEvent(BaseModel):
     mcp_servers: list[dict[str, Any]] | None = None
     bridge_sessions: list[dict[str, Any]] | None = None
     commands: list[str] | None = None
+    command_items: list[CommandSnapshot] | None = None
     modal: dict[str, Any] | None = None
     tool_name: str | None = None
     tool_input: dict[str, Any] | None = None
@@ -140,6 +149,7 @@ class BackendEvent(BaseModel):
         state: AppState,
         tasks: list[TaskRecord],
         commands: list[str],
+        command_items: list[CommandSnapshot] | None = None,
     ) -> "BackendEvent":
         return cls(
             type="ready",
@@ -148,6 +158,7 @@ class BackendEvent(BaseModel):
             mcp_servers=[],
             bridge_sessions=[],
             commands=commands,
+            command_items=command_items,
         )
 
     @classmethod

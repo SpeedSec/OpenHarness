@@ -92,6 +92,8 @@ from openharness.skills import load_skill_registry
 from openharness.skills.types import SkillDefinition
 from openharness.tasks import get_task_manager
 from openharness.plugins.types import PluginCommandDefinition
+from openharness.tools.workflow_tool import format_workflow_run, list_saved_workflows_text
+from openharness.workflows.manager import get_workflow_manager
 
 if TYPE_CHECKING:
     from openharness.config.settings import ProviderProfile
@@ -1237,8 +1239,8 @@ def create_default_command_registry(
             return CommandResult(message=f"Reasoning effort: {current}")
         if value == "max":
             value = "xhigh"
-        if value not in {"low", "medium", "high", "xhigh"}:
-            return CommandResult(message="Usage: /effort [show|low|medium|high|xhigh]")
+        if value not in {"low", "medium", "high", "xhigh", "ultracode"}:
+            return CommandResult(message="Usage: /effort [show|low|medium|high|xhigh|ultracode]")
         settings.effort = value
         save_settings(settings)
         context.engine.set_effort(value)
@@ -2048,6 +2050,70 @@ def create_default_command_registry(
             )
         )
 
+    async def _workflows_handler(args: str, context: CommandContext) -> CommandResult:
+        manager = get_workflow_manager()
+        tokens = args.split(maxsplit=2)
+        if not tokens or tokens[0] in {"list", "runs"}:
+            runs = manager.list_runs(limit=20)
+            if not runs:
+                return CommandResult(message="No workflow runs.")
+            return CommandResult(
+                message="\n".join(
+                    f"{run.id} {run.status} {run.name} agents={run.agent_count} cached={run.cached_count}"
+                    for run in runs
+                )
+            )
+        if tokens[0] in {"saved", "list-saved"}:
+            return CommandResult(message=list_saved_workflows_text(context.cwd))
+        if tokens[0] == "run" and len(tokens) >= 2:
+            name_or_path = args[len("run ") :].strip()
+            try:
+                run = await manager.start_saved(
+                    cwd=context.cwd,
+                    name_or_path=name_or_path,
+                    model=context.engine.model,
+                )
+            except ValueError as exc:
+                return CommandResult(message=str(exc))
+            return CommandResult(message=f"Started workflow {run.id}: {run.name}")
+        if tokens[0] in {"show", "output"} and len(tokens) >= 2:
+            run = manager.get(tokens[1])
+            if run is None:
+                return CommandResult(message=f"Workflow run not found: {tokens[1]}")
+            return CommandResult(message=format_workflow_run(run, include_output=tokens[0] == "output"))
+        if tokens[0] == "pause" and len(tokens) >= 2:
+            try:
+                run = await manager.pause(tokens[1])
+            except ValueError as exc:
+                return CommandResult(message=str(exc))
+            return CommandResult(message=f"Paused workflow {run.id}: {run.status}")
+        if tokens[0] == "stop" and len(tokens) >= 2:
+            try:
+                run = await manager.stop(tokens[1])
+            except ValueError as exc:
+                return CommandResult(message=str(exc))
+            return CommandResult(message=f"Stopped workflow {run.id}: {run.status}")
+        if tokens[0] == "resume" and len(tokens) >= 2:
+            try:
+                run = await manager.resume(run_id=tokens[1], model=context.engine.model)
+            except ValueError as exc:
+                return CommandResult(message=str(exc))
+            return CommandResult(message=f"Resumed workflow {run.id}: {run.status}")
+        if tokens[0] == "save" and len(tokens) >= 3:
+            run_id = tokens[1]
+            name = tokens[2]
+            try:
+                path = manager.save_run_script(cwd=context.cwd, run_id=run_id, name=name)
+            except ValueError as exc:
+                return CommandResult(message=str(exc))
+            return CommandResult(message=f"Saved workflow {run_id} as {path}")
+        return CommandResult(
+            message=(
+                "Usage: /workflows "
+                "[list|saved|run NAME_OR_PATH|show ID|output ID|pause ID|resume ID|stop ID|save ID NAME]"
+            )
+        )
+
     async def _autopilot_handler(args: str, context: CommandContext) -> CommandResult:
         store = RepoAutopilotStore(context.cwd)
         tokens = args.split()
@@ -2450,6 +2516,7 @@ def create_default_command_registry(
     registry.register(SlashCommand("turns", "Show or update maximum agentic turn count", _turns_handler))
     registry.register(SlashCommand("continue", "Continue the previous tool loop if it was interrupted", _continue_handler))
     registry.register(SlashCommand("stop", "Interrupt the running turn from TUI/ohmo channels", _stop_handler))
+    registry.register(SlashCommand("workflows", "List, run, pause, resume, and save dynamic workflows", _workflows_handler))
     registry.register(
         SlashCommand(
             "provider",

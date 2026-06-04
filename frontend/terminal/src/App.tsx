@@ -2,6 +2,7 @@ import React, {useDeferredValue, useEffect, useMemo, useRef, useState} from 'rea
 import {Box, Text, useApp, useInput} from 'ink';
 
 import {readClipboardImage, type ImageAttachment} from './clipboardImage.js';
+import {filterCommandItems} from './commandPalette.js';
 import {CommandPicker} from './components/CommandPicker.js';
 import {ConversationView} from './components/ConversationView.js';
 import {ModalHost} from './components/ModalHost.js';
@@ -145,13 +146,7 @@ function AppInner({config}: {config: FrontendConfig}): React.JSX.Element {
 	}, [deferredTranscript]);
 
 	// Command hints
-	const commandHints = useMemo(() => {
-		const value = input.trim();
-		if (!value.startsWith('/')) {
-			return [] as string[];
-		}
-		return session.commands.filter((cmd) => cmd.startsWith(value)).slice(0, 10);
-	}, [session.commands, input]);
+	const commandHints = useMemo(() => filterCommandItems(session.commandItems, input), [session.commandItems, input]);
 
 	const showPicker = commandHints.length > 0 && !session.busy && !session.modal && !selectModal;
 	const outputStyle = String(session.status.output_style ?? 'default');
@@ -392,8 +387,8 @@ function AppInner({config}: {config: FrontendConfig}): React.JSX.Element {
 				const selected = commandHints[pickerIndex];
 				if (selected) {
 					setInput('');
-					if (!handleCommand(selected)) {
-						onSubmit(selected);
+					if (!handleCommand(selected.name)) {
+						onSubmit(selected.name);
 					}
 				}
 				return;
@@ -405,7 +400,7 @@ function AppInner({config}: {config: FrontendConfig}): React.JSX.Element {
 					// the user can hit Enter immediately to run it, or keep
 					// typing to add args. The trailing space made it look like
 					// Tab was "committing" with a token, which broke the flow.
-					setInput(selected);
+					setInput(selected.name);
 				}
 				return;
 			}

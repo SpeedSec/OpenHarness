@@ -79,6 +79,7 @@ export type BackendEvent = {
 	mcp_servers?: McpServerSnapshot[] | null;
 	bridge_sessions?: BridgeSessionSnapshot[] | null;
 	commands?: string[] | null;
+	command_items?: CommandItemPayload[] | null;
 	modal?: Record<string, unknown> | null;
 	select_options?: SelectOptionPayload[] | null;
 	tool_name?: string | null;
@@ -95,4 +96,10 @@ export type BackendEvent = {
 	plan_mode?: string | null;
 	swarm_teammates?: SwarmTeammateSnapshot[] | null;
 	swarm_notifications?: SwarmNotificationSnapshot[] | null;
+};
+
+export type CommandItemPayload = {
+	name: string;
+	description?: string | null;
+	aliases?: string[] | null;
 };

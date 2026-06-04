@@ -974,6 +974,7 @@ async def _execute_tool_call(
             metadata={
                 "tool_registry": context.tool_registry,
                 "ask_user_prompt": context.ask_user_prompt,
+                "model": context.model,
                 **(context.tool_metadata or {}),
             },
             hook_executor=context.hook_executor,

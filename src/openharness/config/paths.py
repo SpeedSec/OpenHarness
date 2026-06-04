@@ -82,6 +82,27 @@ def get_tasks_dir() -> Path:
     return tasks_dir
 
 
+def get_workflows_dir() -> Path:
+    """Return the workflow runtime storage directory."""
+    workflows_dir = get_data_dir() / "workflows"
+    workflows_dir.mkdir(parents=True, exist_ok=True)
+    return workflows_dir
+
+
+def get_user_workflows_dir() -> Path:
+    """Return the user-level saved workflow directory."""
+    workflows_dir = get_config_dir() / "workflows"
+    workflows_dir.mkdir(parents=True, exist_ok=True)
+    return workflows_dir
+
+
+def get_project_workflows_dir(cwd: str | Path) -> Path:
+    """Return the project-level saved workflow directory."""
+    workflows_dir = get_project_config_dir(cwd) / "workflows"
+    workflows_dir.mkdir(parents=True, exist_ok=True)
+    return workflows_dir
+
+
 def get_feedback_dir() -> Path:
     """Return the feedback storage directory."""
     feedback_dir = get_data_dir() / "feedback"

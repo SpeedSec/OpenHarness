@@ -34,7 +34,13 @@ from openharness.engine.stream_events import (
 from openharness.output_styles import load_output_styles
 from openharness.tasks import get_task_manager
 from openharness.ui.coordinator_drain import drain_coordinator_async_agents
-from openharness.ui.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest, TranscriptItem
+from openharness.ui.protocol import (
+    BackendEvent,
+    CommandSnapshot,
+    FrontendImageAttachment,
+    FrontendRequest,
+    TranscriptItem,
+)
 from openharness.ui.runtime import build_runtime, close_runtime, handle_line, start_runtime
 from openharness.services.session_backend import SessionBackend
 
@@ -115,11 +121,20 @@ class ReactBackendHost:
             include_project_memory=self._config.include_project_memory,
         )
         await start_runtime(self._bundle)
+        command_items = [
+            CommandSnapshot(
+                name=f"/{command.name}",
+                description=command.description,
+                aliases=[f"/{alias}" for alias in command.aliases],
+            )
+            for command in self._bundle.commands.list_commands()
+        ]
         await self._emit(
             BackendEvent.ready(
                 self._bundle.app_state.get(),
                 get_task_manager().list_tasks(),
-                [f"/{command.name}" for command in self._bundle.commands.list_commands()],
+                [item.name for item in command_items],
+                command_items,
             )
         )
         await self._emit(self._status_snapshot())
@@ -577,6 +592,7 @@ class ReactBackendHost:
                 {"value": "medium", "label": "Medium", "description": "Balanced reasoning", "active": settings.effort == "medium"},
                 {"value": "high", "label": "High", "description": "Deepest reasoning", "active": settings.effort == "high"},
                 {"value": "xhigh", "label": "XHigh", "description": "Extra high reasoning", "active": settings.effort == "xhigh"},
+                {"value": "ultracode", "label": "Ultracode", "description": "Prefer dynamic workflows for substantive tasks", "active": settings.effort == "ultracode"},
             ]
             await self._emit(
                 BackendEvent(

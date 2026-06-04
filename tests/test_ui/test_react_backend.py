@@ -21,7 +21,8 @@ from openharness.ui.backend_host import (
     _format_transcript_line,
     run_backend_host,
 )
-from openharness.ui.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest
+from openharness.state.app_state import AppState
+from openharness.ui.protocol import BackendEvent, CommandSnapshot, FrontendImageAttachment, FrontendRequest
 from openharness.ui.runtime import build_runtime, close_runtime, start_runtime
 
 
@@ -139,6 +140,21 @@ def test_format_transcript_line_mentions_attached_images():
             FrontendImageAttachment(media_type="image/jpeg", data="y"),
         ],
     ) == "inspect\n[2 images attached]"
+
+
+def test_ready_event_includes_structured_command_metadata():
+    event = BackendEvent.ready(
+        AppState(model="test-model", permission_mode="default", theme="default"),
+        [],
+        ["/help"],
+        [CommandSnapshot(name="/help", description="Show available commands", aliases=["/h"])],
+    )
+
+    payload = event.model_dump()
+    assert payload["commands"] == ["/help"]
+    assert payload["command_items"] == [
+        {"name": "/help", "description": "Show available commands", "aliases": ["/h"]}
+    ]
 
 
 @pytest.mark.asyncio
