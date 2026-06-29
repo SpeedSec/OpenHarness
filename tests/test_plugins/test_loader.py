@@ -9,6 +9,7 @@ from pathlib import Path
 from openharness.config.settings import Settings
 from openharness.hooks.loader import load_hook_registry
 from openharness.plugins import load_plugins
+from openharness.plugins.bundled import get_bundled_plugin_paths, load_bundled_plugins
 from openharness.plugins.loader import get_user_plugins_dir
 from openharness.skills import load_skill_registry
 
@@ -121,6 +122,21 @@ def test_load_plugins_from_project_dir(tmp_path: Path, monkeypatch):
     assert {agent.name for agent in plugin.agents} == {"example:review:reviewer"}
     assert "session_start" in plugin.hooks
     assert "demo" in plugin.mcp_servers
+
+
+def test_bundled_srchunter_plugin_is_discovered_and_enabled_by_default() -> None:
+    paths = get_bundled_plugin_paths()
+
+    assert any(path.name == "srchunter" for path in paths)
+
+
+def test_bundled_srchunter_plugin_loads_tool_by_default(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPENHARNESS_CONFIG_DIR", str(tmp_path / "config"))
+    plugins = load_bundled_plugins(Settings())
+
+    srchunter = next(plugin for plugin in plugins if plugin.manifest.name == "srchunter")
+    assert srchunter.enabled is True
+    assert [tool.name for tool in srchunter.tools] == ["srchunter"]
 
 
 def test_plugin_skills_and_hooks_are_merged(tmp_path: Path, monkeypatch):

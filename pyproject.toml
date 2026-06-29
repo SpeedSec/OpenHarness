@@ -71,10 +71,12 @@ exclude = [
 "frontend/terminal/package.json" = "openharness/_frontend/package.json"
 "frontend/terminal/tsconfig.json" = "openharness/_frontend/tsconfig.json"
 "frontend/terminal/src" = "openharness/_frontend/src"
+"src/openharness/plugins/bundled/srchunter" = "openharness/plugins/bundled/srchunter"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100

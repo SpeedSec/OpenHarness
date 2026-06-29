@@ -37,6 +37,7 @@ from openharness.mcp.client import McpClientManager
 from openharness.mcp.config import load_mcp_server_configs
 from openharness.permissions import PermissionChecker
 from openharness.plugins import load_plugins
+from openharness.plugins.bundled import load_bundled_plugins
 from openharness.prompts import build_runtime_system_prompt
 from openharness.state import AppState, AppStateStore
 from openharness.services.session_backend import DEFAULT_SESSION_BACKEND, SessionBackend
@@ -153,6 +154,17 @@ class RuntimeBundle:
 
     def current_plugins(self):
         """Return currently visible plugins for the working tree."""
+        settings = self.current_settings()
+        plugins = load_plugins(
+            settings,
+            self.cwd,
+            extra_roots=self.extra_plugin_roots,
+        )
+        bundled_plugins = load_bundled_plugins(settings)
+        return [*bundled_plugins, *plugins]
+
+    def current_project_plugins(self):
+        """Return project/user plugins for the working tree."""
         return load_plugins(
             self.current_settings(),
             self.cwd,
@@ -315,15 +327,17 @@ async def build_runtime(
     normalized_skill_dirs = tuple(str(Path(path).expanduser().resolve()) for path in (extra_skill_dirs or ()))
     normalized_plugin_roots = tuple(str(Path(path).expanduser().resolve()) for path in (extra_plugin_roots or ()))
     plugins = load_plugins(settings, cwd, extra_roots=normalized_plugin_roots)
+    bundled_plugins = load_bundled_plugins(settings)
+    all_plugins = [*bundled_plugins, *plugins]
     if api_client:
         resolved_api_client = api_client
     else:
         resolved_api_client = _resolve_api_client_from_settings(settings)
-    mcp_manager = McpClientManager(load_mcp_server_configs(settings, plugins))
+    mcp_manager = McpClientManager(load_mcp_server_configs(settings, all_plugins))
     await mcp_manager.connect_all()
     tool_registry = create_default_tool_registry(mcp_manager)
     # Register plugin-provided tools
-    for plugin in plugins:
+    for plugin in all_plugins:
         if plugin.enabled and plugin.tools:
             for tool in plugin.tools:
                 tool_registry.register(tool)
@@ -356,7 +370,7 @@ async def build_runtime(
     )
     hook_reloader = HookReloader(get_config_file_path())
     hook_executor = HookExecutor(
-        hook_reloader.current_registry() if api_client is None else load_hook_registry(settings, plugins),
+        hook_reloader.current_registry() if api_client is None else load_hook_registry(settings, all_plugins),
         HookExecutionContext(
             cwd=Path(cwd).resolve(),
             api_client=resolved_api_client,
@@ -453,7 +467,7 @@ async def build_runtime(
         commands=create_default_command_registry(
             plugin_commands=[
                 command
-                for plugin in plugins
+                for plugin in all_plugins
                 if plugin.enabled
                 for command in plugin.commands
             ]

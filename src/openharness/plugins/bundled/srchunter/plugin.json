@@ -1,0 +1,7 @@
+{
+  "name": "srchunter",
+  "version": "7.1.0",
+  "description": "Bundled SRCHunter OpenHarness facade tools",
+  "enabled_by_default": true,
+  "tools_dir": "tools"
+}
