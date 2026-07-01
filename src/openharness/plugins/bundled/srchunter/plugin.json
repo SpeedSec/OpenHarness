@@ -1,7 +1,7 @@
 {
   "name": "srchunter",
-  "version": "7.1.0",
-  "description": "Bundled SRCHunter OpenHarness facade tools",
+  "version": "9.0.0",
+  "description": "Bundled SRCHunter OpenHarness facade tools, including scoped task refs",
   "enabled_by_default": true,
   "tools_dir": "tools"
 }

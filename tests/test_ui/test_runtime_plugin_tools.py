@@ -49,7 +49,34 @@ class _FacadeClient:
             "status": "completed",
         }
 
+    def run_scoped_task(self, payload):
+        return {
+            **self._base_payload(),
+            "artifact_refs": ["artifact:phase9/scoped/raw-signal-1"],
+            "provenance_refs": ["scoped-http-run:SCR_1"],
+            "kind": "scoped_http",
+            "payload": payload,
+            "status": "blocked",
+            "blocked": True,
+            "blocking_reasons": ["execution_scope_required"],
+            "classification": "raw_signal",
+            "finding_classification": "phenomenon",
+            "candidate_ready": False,
+            "real_target_touch": True,
+        }
+
     def get_artifact_refs(self, payload):
+        if payload.get("goal") == "9.B2":
+            return {
+                **self._base_payload(),
+                "goal": "9.B2",
+                "kind": "artifact_refs",
+                "payload": payload,
+                "status": "ok",
+                "artifact_refs": ["artifact:phase9/scoped/raw-signal-1"],
+                "provenance_refs": ["scoped-http-run:SCR_1"],
+                "real_target_touch": payload.get("real_target_touch", False),
+            }
         return {
             **self._base_payload(),
             "kind": "artifact_refs",
@@ -64,6 +91,16 @@ class _UnsafeFacadeClient(_FacadeClient):
             **self._base_payload(),
             "artifact_refs": [],
             "provenance_refs": ["provenance:phase6/openharness_worker_run"],
+            "status": "completed",
+            "summary": "confirmed vulnerability",
+            "payload": payload,
+        }
+
+    def run_scoped_task(self, payload):
+        return {
+            **self._base_payload(),
+            "artifact_refs": ["artifact:phase9/scoped/raw-signal-1"],
+            "provenance_refs": ["scoped-http-run:SCR_1"],
             "status": "completed",
             "summary": "confirmed vulnerability",
             "payload": payload,
@@ -190,6 +227,17 @@ async def test_build_runtime_registers_bundled_srchunter_tool(tmp_path: Path, mo
             ToolExecutionContext(cwd=tmp_path),
         )
         assert "\"status\": \"ok\"" in result.output
+        scoped_result = await tool.execute(
+            tool.input_model.model_validate(
+                {
+                    "action": "srchunter_run_scoped_task",
+                    "payload": {"task_ref": "task:runtime-scoped"},
+                }
+            ),
+            ToolExecutionContext(cwd=tmp_path),
+        )
+        assert scoped_result.is_error is False
+        assert "\"operation\": \"srchunter_run_scoped_task\"" in scoped_result.output
     finally:
         await close_runtime(bundle)
 
@@ -233,6 +281,90 @@ async def test_bundled_srchunter_tool_is_thin_wrapper(tmp_path: Path, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_bundled_srchunter_tool_runs_scoped_task_through_facade(
+    tmp_path: Path,
+    monkeypatch,
+):
+    monkeypatch.setenv("OPENHARNESS_CONFIG_DIR", str(tmp_path / "config"))
+    _patch_srchunter_facade(monkeypatch)
+
+    from openharness.plugins.bundled.srchunter.tools.srchunter_openharness_tool import (
+        SRCHunterTool,
+    )
+
+    tool = SRCHunterTool()
+    result = await tool.execute(
+        tool.input_model.model_validate(
+            {
+                "action": "srchunter_run_scoped_task",
+                "payload": {
+                    "task_ref": "task:scoped",
+                    "execution_scope_freeze_hash_ref": "sha256:scope",
+                },
+            }
+        ),
+        ToolExecutionContext(cwd=tmp_path),
+    )
+
+    assert result.is_error is False
+    output = json.loads(result.output)
+    assert output["goal"] == "9.B3"
+    assert output["kind"] == "scoped_http"
+    assert output["tool"] == "srchunter"
+    assert output["operation"] == "srchunter_run_scoped_task"
+    assert output["status"] == "blocked"
+    assert output["facade_status"] == "blocked"
+    assert output["client_facade_used"] is True
+    assert output["tool_output_is_verdict"] is False
+    assert output["tool_output_self_proves_vulnerability"] is False
+    assert output["classification"] == "raw_signal"
+    assert output["finding_classification"] == "phenomenon"
+    assert output["candidate_only"] is True
+    assert output["real_target_touch"] is True
+    assert output["real_src_target_touch"] is False
+    assert output["platform_submissions"] == 0
+    assert output["blocking_reasons"] == ["execution_scope_required"]
+
+
+@pytest.mark.asyncio
+async def test_bundled_srchunter_tool_get_artifacts_preserves_scoped_target_touch(
+    tmp_path: Path,
+    monkeypatch,
+):
+    monkeypatch.setenv("OPENHARNESS_CONFIG_DIR", str(tmp_path / "config"))
+    _patch_srchunter_facade(monkeypatch)
+
+    from openharness.plugins.bundled.srchunter.tools.srchunter_openharness_tool import (
+        SRCHunterTool,
+    )
+
+    tool = SRCHunterTool()
+    result = await tool.execute(
+        tool.input_model.model_validate(
+            {
+                "action": "srchunter_get_artifacts",
+                "payload": {
+                    "goal": "9.B2",
+                    "real_target_touch": True,
+                    "artifact_refs": ["artifact:phase9/scoped/raw-signal-1"],
+                    "provenance_refs": ["scoped-http-run:SCR_1"],
+                },
+            }
+        ),
+        ToolExecutionContext(cwd=tmp_path),
+    )
+
+    assert result.is_error is False
+    output = json.loads(result.output)
+    assert output["goal"] == "9.B3"
+    assert output["operation"] == "srchunter_get_artifacts"
+    assert output["kind"] == "artifact_refs"
+    assert output["real_target_touch"] is True
+    assert output["real_src_target_touch"] is False
+    assert output["platform_submissions"] == 0
+
+
+@pytest.mark.asyncio
 async def test_bundled_srchunter_tool_rejects_verdict_or_empty_refs(
     tmp_path: Path,
     monkeypatch,
@@ -260,6 +392,50 @@ async def test_bundled_srchunter_tool_rejects_verdict_or_empty_refs(
 
     assert result.is_error is True
     assert "verdict" in result.output or "artifact_refs" in result.output
+
+
+@pytest.mark.asyncio
+async def test_bundled_srchunter_scoped_tool_rejects_verdict_output(
+    tmp_path: Path,
+    monkeypatch,
+):
+    monkeypatch.setenv("OPENHARNESS_CONFIG_DIR", str(tmp_path / "config"))
+    _patch_unsafe_srchunter_facade(monkeypatch)
+
+    from openharness.plugins.bundled.srchunter.tools.srchunter_openharness_tool import (
+        SRCHunterTool,
+    )
+
+    tool = SRCHunterTool()
+    result = await tool.execute(
+        tool.input_model.model_validate(
+            {
+                "action": "srchunter_run_scoped_task",
+                "payload": {"task_ref": "task:scoped"},
+            }
+        ),
+        ToolExecutionContext(cwd=tmp_path),
+    )
+
+    assert result.is_error is True
+    assert "verdict" in result.output
+
+
+def test_bundled_srchunter_scoped_tool_does_not_bypass_facade() -> None:
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "openharness"
+        / "plugins"
+        / "bundled"
+        / "srchunter"
+        / "tools"
+        / "srchunter_openharness_tool.py"
+    ).read_text(encoding="utf-8")
+
+    assert ".run_scoped_task(" in source
+    assert "run_scoped_http_task" not in source
+    assert "ScopedHttpRunRequest" not in source
 
 
 @pytest.mark.asyncio

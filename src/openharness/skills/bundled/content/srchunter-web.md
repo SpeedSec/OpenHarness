@@ -27,6 +27,11 @@ Preserve these boundaries exactly:
 - no OpenHarness/tool/skill/bridge verdict authority
 - LLM must not self-prove vulnerabilities
 
+For a Core-brokered `srchunter_run_scoped_task` result, a returned
+`real_target_touch: true` flag is only an observation provenance flag from
+SRCHunter Core under a frozen `ExecutionScope`; it is not an LLM/tool verdict,
+an SRC submission, or authorized-pilot readiness.
+
 SRCHunter Core owns evidence predicate derivation, report readiness, coverage
 decisions, action policy, delivery decisions, freeze, and final candidate
 promotion. OpenHarness, the `srchunter` tool, this skill, structured output
@@ -39,7 +44,11 @@ Use the OpenHarness `srchunter` tool path before referencing evidence:
 1. Use `srchunter_healthcheck` when the SRCHunter facade/tool state is unknown.
 2. Use `srchunter_run_fixture` only for fixture or local-lab research already
    scoped by the operator.
-3. Use `srchunter_get_artifacts`, or artifact refs returned by a prior
+3. Use `srchunter_run_scoped_task` only when SRCHunter Core or the operator has
+   supplied a JSON-safe request with frozen `ExecutionScope` and authority refs.
+   This action is a facade call into SRCHunter Core; never replace it with
+   direct HTTP, browser, scanner, or platform calls.
+4. Use `srchunter_get_artifacts`, or artifact refs returned by a prior
    `srchunter_run_fixture`, before citing evidence, provenance, findings,
    candidates, blindspots, or missing evidence.
 

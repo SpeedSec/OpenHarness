@@ -17,6 +17,7 @@ from openharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
 SRCHunterToolAction = Literal[
     "srchunter_healthcheck",
     "srchunter_run_fixture",
+    "srchunter_run_scoped_task",
     "srchunter_get_artifacts",
 ]
 
@@ -53,6 +54,8 @@ class SRCHunterTool(BaseTool):
                 facade_payload = client.healthcheck()
             elif tool_input.action == "srchunter_run_fixture":
                 facade_payload = client.run_fixture_task(**tool_input.payload)
+            elif tool_input.action == "srchunter_run_scoped_task":
+                facade_payload = client.run_scoped_task(tool_input.payload)
             elif tool_input.action == "srchunter_get_artifacts":
                 facade_payload = client.get_artifact_refs(tool_input.payload)
             else:  # pragma: no cover - Literal keeps this unreachable in practice
@@ -78,9 +81,12 @@ class SRCHunterTool(BaseTool):
 
 def _tool_payload(operation: str, facade_payload: dict[str, Any]) -> dict[str, Any]:
     facade_status = facade_payload.get("status", "ok")
+    scoped_output = operation == "srchunter_run_scoped_task" or (
+        facade_payload.get("goal") == "9.B2"
+    )
     payload = {
         **facade_payload,
-        "goal": "7.1",
+        "goal": "9.B3" if scoped_output else "7.1",
         "tool": "srchunter",
         "operation": operation,
         "status": "ok" if facade_status == "completed" else facade_status,
@@ -134,7 +140,12 @@ def _write_tool_smoke_artifact(payload: dict[str, Any]) -> None:
 def _assert_tool_boundary(payload: dict[str, Any]) -> None:
     if payload.get("candidate_only") is not True:
         raise ValueError("candidate_only must be true")
-    if payload.get("real_target_touch") is not False:
+    if payload.get("operation") == "srchunter_run_scoped_task" or payload.get(
+        "goal"
+    ) == "9.B3":
+        if not isinstance(payload.get("real_target_touch"), bool):
+            raise ValueError("real_target_touch must be boolean")
+    elif payload.get("real_target_touch") is not False:
         raise ValueError("real_target_touch must be false")
     if payload.get("real_src_target_touch") is not False:
         raise ValueError("real_src_target_touch must be false")
